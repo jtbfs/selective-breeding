@@ -2,7 +2,7 @@
 
 This is a mod for selective breeding in The Bibites! It can be used to selectively breed bibites (of your choice) with other bibites (also of your choice), or templates.
 
-Which means this is extremely useful for minimizing evolution degrading, and keeping bibites on a similar evolutionary pathway as the selective bred (whether that is the template, other bibites, etc) while finetuning it (or making it better).
+Which means this is extremely useful for minimizing evolution degradation, and keeping bibites on a similar evolutionary pathway as the selective bred (whether that is the template, other bibites, etc) while finetuning it (or making it better).
 
 So it is really good for competition purposes, or in general.
 
