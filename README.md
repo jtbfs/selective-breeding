@@ -37,3 +37,5 @@ Default settings (if you didn't customize any options):
 - `genePercent`: randomized between `0%` to `100%`
 - `brainPercent`: `50%`
 - `customTargetTag`: none (all)
+
+Example of the correct tag applicance: <img width="1281" height="490" alt="image" src="https://github.com/user-attachments/assets/e98905f5-87ef-4303-b36f-d51409047374" />
