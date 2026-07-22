@@ -8,6 +8,8 @@ using ManagementScripts;
 using SettingScripts;
 using SimulationScripts;
 using SimulationScripts.BibiteScripts;
+using UIScripts.SettingHandles;
+using UIScripts.SettingHandles.References;
 using UnityEngine;
 using Utility;
 
@@ -73,6 +75,7 @@ namespace Reproduction
 
         private static readonly Dictionary<string, EliteConfig> Elites = new Dictionary<string, EliteConfig>();
         private static readonly Dictionary<BibiteGenes, int> EggCounts = new Dictionary<BibiteGenes, int>();
+        private static BibiteSpawner cache;
 
         private static AccessTools.FieldRef<BibiteSpawner, List<BibiteSpawnInfo>> _bibiteSpawnInfosRef;
         private static bool _bibiteSpawnInfosRefFailed;
@@ -141,7 +144,6 @@ namespace Reproduction
             return true;
         }
         public static bool HasAnyElites => Elites.Count > 0;
-
         public static void TryRegister(BibiteBody body)
         {
             if (body.gene == null) return;
@@ -167,7 +169,6 @@ namespace Reproduction
             };
             //Plugin.Log?.LogInfo($"Registry.TryRegister: registered slot '{(slotKey == DefaultSlotKey ? "<default>" : slotKey)}' interval={interval} gene%={(genePct.HasValue ? genePct.Value.ToString() : "random")} brainType={brainTransferType} brain%={brainPct} (from living bibite)");
         }
-
         public static void Unregister(BibiteBody body)
         {
             if (body.gene == null) return;
@@ -187,9 +188,9 @@ namespace Reproduction
             for (int i = 0; i < toRemove.Count; i++) Elites.Remove(toRemove[i]);
             //Plugin.Log?.LogInfo($"Registry.Unregister: removed {toRemove.Count} slot(s) sourced from a bibite that just died");
         }
-
         public static void RescanTemplates(BibiteSpawner spawner)
         {
+            cache = spawner;
             var infosRef = GetBibiteSpawnInfosRef();
             if (infosRef == null) return;
 
@@ -245,19 +246,68 @@ namespace Reproduction
             if (stale != null)
                 for (int i = 0; i < stale.Count; i++) Elites.Remove(stale[i]);
         }
+        public static void RescanIfPossible()
+        {
+            if (cache != null)
+                RescanTemplates(cache);
+            else
+                RescanFromSettings();
+        }
+        public static void RescanFromSettings()
+        {
+            var keysToRemove = new List<string>();
+            foreach (var kv in Elites)
+                if (kv.Value.SourceGenes == null)
+                    keysToRemove.Add(kv.Key);
+            foreach (var key in keysToRemove)
+                Elites.Remove(key);
 
+            if (ScenarioSettings.Instance == null) return;
+
+            foreach (BibiteSettings settings in ScenarioSettings.Instance.bibites)
+            {
+                if (settings.tagging.val != Tagging.CustomTagging) continue;
+                string tag = settings.customTag.val;
+                if (!TryParseTag(tag, out int interval, out int brainTransferType, out float? genePct, out float brainPct, out string slotKey))
+                    continue;
+
+                BibiteTemplate template = null;
+                try
+                {
+                    template = new BibiteTemplate(settings.filePath, settings.isExternal);
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log?.LogWarning($"Couldn't load template '{settings.templateName}': {e.Message}");
+                }
+                if (template?.genes == null || template.nodes == null || template.synapses == null)
+                    continue;
+
+                Elites[slotKey] = new EliteConfig
+                {
+                    EggInterval = interval,
+                    GenePercent = genePct,
+                    BrainPercent = brainPct,
+                    BrainTransferType = brainTransferType,
+                    GeneValues = template.genes,
+                    BrainNodes = template.nodes,
+                    BrainSynapses = template.synapses,
+                    SourceGenes = null
+                };
+            }
+        }
         public static bool TryGetConfigFor(string motherTag, out EliteConfig config)
         {
             if (!string.IsNullOrEmpty(motherTag) && Elites.TryGetValue(motherTag, out config))
                 return true;
             return Elites.TryGetValue(DefaultSlotKey, out config);
         }
-
         public static void Clear()
         {
             //Plugin.Log?.LogInfo($"Registry.Clear: wiping {Elites.Count} slot(s) and {EggCounts.Count} egg counter(s)");
             Elites.Clear();
             EggCounts.Clear();
+            cache = null;
         }
     }
 
@@ -266,6 +316,8 @@ namespace Reproduction
     {
         private static readonly MethodInfo InitEggMethod = AccessTools.Method(typeof(EggHatching), "InitEgg");
         private static readonly HashSet<EggHatching> InProgress = new HashSet<EggHatching>();
+        private static readonly List<long> ScratchSortedNodeInov = new List<long>();
+        private static readonly List<long> ScratchSortedSynInov = new List<long>();
 
         static void Postfix(EggHatching __instance)
         {
@@ -372,8 +424,9 @@ namespace Reproduction
             foreach (long inov in ScratchChildHidden.Keys) ScratchHiddenInov.Add(inov);
             foreach (long inov in ScratchEliteHidden.Keys) ScratchHiddenInov.Add(inov);
 
-            List<long> sortedNodeInov = new List<long>(ScratchHiddenInov);
-            sortedNodeInov.Sort();
+            ScratchSortedNodeInov.Clear();
+            ScratchSortedNodeInov.AddRange(ScratchHiddenInov);
+            ScratchSortedNodeInov.Sort();
 
             ScratchMergedNodes.Clear();
             ScratchIndexByInov.Clear();
@@ -382,10 +435,10 @@ namespace Reproduction
             // "owns" each run - same algorithm as CrossoverGenes, just over a different sequence.
             bool takeChild = UnityEngine.Random.value >= eliteChance;
             int run = 0;
-            int runLength = eggGene.RandChi(sortedNodeInov.Count);
-            for (int idx = 0; idx < sortedNodeInov.Count; idx++)
+            int runLength = eggGene.RandChi(ScratchSortedNodeInov.Count);
+            for (int idx = 0; idx < ScratchSortedNodeInov.Count; idx++)
             {
-                long inov = sortedNodeInov[idx];
+                long inov = ScratchSortedNodeInov[idx];
                 bool inChild = ScratchChildHidden.TryGetValue(inov, out NEATBrain.Node childNode);
                 bool inElite = ScratchEliteHidden.TryGetValue(inov, out NEATBrain.Node eliteNode);
 
@@ -400,7 +453,7 @@ namespace Reproduction
                 if (run >= runLength)
                 {
                     takeChild = !takeChild;
-                    runLength = eggGene.RandChi(sortedNodeInov.Count - idx - 1);
+                    runLength = eggGene.RandChi(ScratchSortedNodeInov.Count - idx - 1);
                     run = 0;
                 }
             }
@@ -415,16 +468,17 @@ namespace Reproduction
             foreach (long inov in ScratchChildSyn.Keys) ScratchSynInov.Add(inov);
             foreach (long inov in ScratchEliteSyn.Keys) ScratchSynInov.Add(inov);
 
-            List<long> sortedSynInov = new List<long>(ScratchSynInov);
-            sortedSynInov.Sort();
+            ScratchSortedSynInov.Clear();
+            ScratchSortedSynInov.AddRange(ScratchSynInov);
+            ScratchSortedSynInov.Sort();
 
             ScratchMergedSynapses.Clear();
             takeChild = UnityEngine.Random.value >= eliteChance;
             run = 0;
-            runLength = eggGene.RandChi(sortedSynInov.Count);
-            for (int idx = 0; idx < sortedSynInov.Count; idx++)
+            runLength = eggGene.RandChi(ScratchSortedSynInov.Count);
+            for (int idx = 0; idx < ScratchSortedSynInov.Count; idx++)
             {
-                long inov = sortedSynInov[idx];
+                long inov = ScratchSortedSynInov[idx];
                 bool inChild = ScratchChildSyn.TryGetValue(inov, out NEATBrain.Synaps childSyn);
                 bool inElite = ScratchEliteSyn.TryGetValue(inov, out NEATBrain.Synaps eliteSyn);
 
@@ -445,7 +499,7 @@ namespace Reproduction
                 if (run >= runLength)
                 {
                     takeChild = !takeChild;
-                    runLength = eggGene.RandChi(sortedSynInov.Count - idx - 1);
+                    runLength = eggGene.RandChi(ScratchSortedSynInov.Count - idx - 1);
                     run = 0;
                 }
             }
@@ -470,6 +524,24 @@ namespace Reproduction
     public static class UnregisterOnDeath
     {
         static void Postfix(BibiteBody __instance) => Registry.Unregister(__instance);
+    }
+
+    [HarmonyPatch(typeof(BibiteSettingsHandle), "InitializeItem")]
+    public static class RescanOnTagFieldEdit
+    {
+        static readonly AccessTools.FieldRef<BibiteSettingsHandle, StringFieldHandle> CustomTagFieldRef =
+            AccessTools.FieldRefAccess<BibiteSettingsHandle, StringFieldHandle>("customTagField");
+
+        static void Postfix(BibiteSettingsHandle __instance)
+        {
+            StringFieldHandle tagField = CustomTagFieldRef(__instance);
+            if (tagField?.field == null) return;
+
+            tagField.field.onEndEdit.AddListener(delegate (string _)
+            {
+                Registry.RescanIfPossible();
+            });
+        }
     }
 
     [HarmonyPatch(typeof(BibiteSpawner), "StartSpawner")]
