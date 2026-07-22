@@ -39,3 +39,8 @@ Default settings (if you didn't customize any options):
 - `customTargetTag`: none (all)
 
 Example of the correct tag applicance: <img width="1281" height="490" alt="image" src="https://github.com/user-attachments/assets/e98905f5-87ef-4303-b36f-d51409047374" />
+
+> ⚠️ Math-related functions, biology-related stuff are AI-assisted, I am so SORRY, as I absolutely do not know ANY maths, nor do I know what a "realistic crossover" is, without relying on AI/googling for what the hell an acceptable one is.
+> So, because that's basically almost all of this code, it is. But it does work beautifully, and fulfill my goal (minimize evolution degradation, and also be able to finetune my own engineered bibites)~
+> On that note, I did learn a lot from that: there's a thing called "NEAT" (NeuroEvolution of Augmenting Topologies), which is where The Bibites takes inspiration from, specifically the brains (and I believe, genes as well?).
+> Also, the game already has support for gene-crossover, I just kinda copied that for the brain-crossover as well. Close enough!
