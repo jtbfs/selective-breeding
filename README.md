@@ -44,3 +44,5 @@ Example of the correct tag applicance: <img width="1281" height="490" alt="image
 > So, because that's basically almost all of this code, it is. But it does work beautifully, and fulfill my goal (minimize evolution degradation, and also be able to finetune my own engineered bibites)~
 > On that note, I did learn a lot from that: there's a thing called "NEAT" (NeuroEvolution of Augmenting Topologies), which is where The Bibites takes inspiration from, specifically the brains (and I believe, genes as well?).
 > Also, the game already has support for gene-crossover, I just kinda copied that for the brain-crossover as well. Close enough!
+
+> Installation link: https://github.com/jtbfs/selective-breeding/releases
